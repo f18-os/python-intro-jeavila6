@@ -8,7 +8,7 @@ import re
 def execute(pgm):
     """Execute pgm -- program with arguments."""
     args = pgm.split()
-    if os.path.exists(args[0]):  # args[0] is a path
+    if '/' in args[0]:  # args[0] is a path
         os.execve(args[0], args, os.environ)
     else:
         for directory in re.split(':', os.environ['PATH']):  # try each directory in PATH
@@ -34,8 +34,14 @@ while True:
         print('Fork failed:', e, file=sys.stderr)
         continue
 
-    if ret_val == 0:  # child
-        cmd_split = re.split('([<>])', cmd)
+    if ret_val:  # parent
+        child_pid, child_esi = os.wait()  # wait until child completes, store its process id and exit status indicator
+        child_exit_stat = child_esi >> 8  # get exit status from exist status indicator
+        if child_exit_stat:
+            print('Child terminated with exit status', child_exit_stat, file=sys.stderr)
+
+    else:  # child
+        cmd_split = re.split('([<>|])', cmd)
         if len(cmd_split) == 3 and cmd_split[1] in ['<', '>']:  # command is in format: *program* [args] {<|>} *file*
             pgm, redir_op, file = cmd_split
             if redir_op == '<':  # input redirection
@@ -48,10 +54,24 @@ while True:
                 fd = sys.stdout.fileno()
             os.set_inheritable(fd, True)
             execute(pgm)
-        execute(cmd_split[0])  # command is in some other format
 
-    else:  # parent
-        child_pid, child_esi = os.wait()  # wait until child completes, store its process id and exit status indicator
-        child_exit_stat = child_esi >> 8  # get exit status from exist status indicator
-        if child_exit_stat != 0:
-            print('Child terminated with exit status', child_exit_stat, file=sys.stderr)
+        if len(cmd_split) == 3 and cmd_split[1] == '|':  # command is in format: *program* [args] | *program* [args]
+            pgm1, pipe, pgm2 = cmd_split
+            pipe_read, pipe_write = os.pipe()
+            try:
+                ret_val = os.fork()
+            except OSError as e:
+                print('Fork failed:', e, file=sys.stderr)
+                continue
+            if ret_val:  # parent
+                child_pid, child_esi = os.wait()
+                child_exit_stat = child_esi >> 8
+                if child_exit_stat:
+                    print('Child terminated with exit status', child_exit_stat, file=sys.stderr)
+                os.dup2(pipe_read, 0)
+                execute(pgm2)
+            else:  # child
+                os.dup2(pipe_write, 1)
+                execute(pgm1)
+
+        execute(cmd_split[0])  # command is in some other format
