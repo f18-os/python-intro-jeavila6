@@ -1,4 +1,4 @@
-#! /usr/bin/env python3
+#!/usr/bin/env python3
 
 import os
 import sys
@@ -21,7 +21,8 @@ def execute(pgm):
 
 
 while True:
-    print('$ ', end='')
+    prompt = os.getenv('PS1', '$')  # use PS1 as prompt if it exists, else use '$'
+    print(prompt, end=' ')
     cmd = input()
     if not cmd.split():
         continue  # ignore empty command
@@ -56,7 +57,7 @@ while True:
             execute(pgm)
 
         if len(cmd_split) == 3 and cmd_split[1] == '|':  # command is in format: *program* [args] | *program* [args]
-            pgm1, pipe, pgm2 = cmd_split
+            pgm1, pgm2 = cmd_split[0], cmd_split[2]
             pipe_read, pipe_write = os.pipe()
             try:
                 ret_val = os.fork()
