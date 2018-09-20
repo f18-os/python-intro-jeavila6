@@ -22,8 +22,11 @@ def execute(pgm):
 
 while True:
     prompt = os.getenv('PS1', '$')  # use PS1 as prompt if it exists, else use '$'
-    print(prompt, end=' ')
-    cmd = input()
+    os.write(1, prompt.encode())
+    try:
+        cmd = input()
+    except EOFError:
+        exit()
     if not cmd.split():
         continue  # ignore empty command
     if cmd == 'exit':
